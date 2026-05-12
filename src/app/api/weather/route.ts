@@ -16,7 +16,6 @@ export async function GET(request: NextRequest) {
 
     const data = await res.json()
 
-    // Find forecast entry closest to noon on the requested date
     const targetDate = new Date(`${date}T12:00:00`)
     let closest: any = null
     let minDiff = Infinity
@@ -30,7 +29,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (!closest) return NextResponse.json({ error: 'No forecast for this date' }, { status: 404 })
+    if (!closest) return NextResponse.json({ error: 'too_far' }, { status: 404 })
+
+    // Ověř že nalezený záznam je skutečně na správném dni (tolerance 12 hodin)
+    const closestDate = new Date(closest.dt * 1000)
+    const sameDay =
+      closestDate.getFullYear() === targetDate.getFullYear() &&
+      closestDate.getMonth() === targetDate.getMonth() &&
+      closestDate.getDate() === targetDate.getDate()
+
+    if (!sameDay) return NextResponse.json({ error: 'too_far' }, { status: 404 })
 
     return NextResponse.json({
       temp: Math.round(closest.main.temp),

@@ -24,7 +24,7 @@ export default function DayDetailPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [availableIds, setAvailableIds] = useState<string[]>([])
-  const [tripWeathers, setTripWeathers] = useState<Record<number, WeatherData | null>>({})
+  const [tripWeathers, setTripWeathers] = useState<Record<number, WeatherData | null | 'too_far'>>({})
   const [voteCounts, setVoteCounts] = useState<Record<number, number>>({})
   const [myVote, setMyVote] = useState<number | null>(null)
   const [removedIds, setRemovedIds] = useState<number[]>([])
@@ -70,7 +70,8 @@ export default function DayDetailPage() {
           try {
             const res = await fetch(`/api/weather?date=${date}&city=${encodeURIComponent(trip.city)}`)
             if (res.ok) return { id: trip.id, data: await res.json() as WeatherData }
-            return { id: trip.id, data: null }
+            const body = await res.json().catch(() => ({}))
+            return { id: trip.id, data: body.error === 'too_far' ? 'too_far' as const : null }
           } catch {
             return { id: trip.id, data: null }
           }
@@ -245,6 +246,8 @@ export default function DayDetailPage() {
                   <span className="text-xs text-gray-400 flex-shrink-0">Počasí v {trip.city}:</span>
                   {weather === undefined ? (
                     <span className="text-xs text-gray-400">Načítám...</span>
+                  ) : weather === 'too_far' ? (
+                    <span className="text-xs text-gray-400">Počasí zatím není známé, doplní se později ☁️</span>
                   ) : weather === null ? (
                     <span className="text-xs text-gray-400">Předpověď nedostupná</span>
                   ) : (
