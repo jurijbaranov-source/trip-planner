@@ -27,10 +27,9 @@ export default function DayDetailPage() {
   const [tripWeathers, setTripWeathers] = useState<Record<number, WeatherData | null>>({})
   const [voteCounts, setVoteCounts] = useState<Record<number, number>>({})
   const [myVote, setMyVote] = useState<number | null>(null)
+  const [removedIds, setRemovedIds] = useState<number[]>([])
   const [voting, setVoting] = useState(false)
   const [loading, setLoading] = useState(true)
-
-  const trips = getTripsForDate(date)
 
   useEffect(() => {
     async function loadData() {
@@ -39,11 +38,13 @@ export default function DayDetailPage() {
         { data: profilesData },
         { data: availData },
         { data: votesData },
+        { data: removedData },
       ] = await Promise.all([
         supabase.auth.getUser(),
         supabase.from('profiles').select('*'),
         supabase.from('availability').select('user_id').eq('date', date),
         supabase.from('votes').select('user_id, trip_id').eq('date', date),
+        supabase.from('removed_trips').select('trip_id'),
       ])
 
       setUserId(user?.id ?? null)
@@ -59,9 +60,11 @@ export default function DayDetailPage() {
       const mine = votesData?.find(v => v.user_id === user?.id)
       setMyVote(mine?.trip_id ?? null)
 
+      const removed = (removedData ?? []).map((r: any) => r.trip_id)
+      setRemovedIds(removed)
       setLoading(false)
 
-      // Fetch weather for all 3 trips in parallel
+      const trips = getTripsForDate(date, removed)
       const weatherResults = await Promise.all(
         trips.map(async (trip) => {
           try {
@@ -87,12 +90,10 @@ export default function DayDetailPage() {
     setVoting(true)
 
     if (myVote === tripId) {
-      // Zrušit hlas
       await supabase.from('votes').delete().eq('user_id', userId).eq('date', date)
       setVoteCounts(prev => ({ ...prev, [tripId]: Math.max(0, (prev[tripId] ?? 1) - 1) }))
       setMyVote(null)
     } else {
-      // Hlasovat / změnit hlas
       await supabase.from('votes').upsert(
         { user_id: userId, date, trip_id: tripId },
         { onConflict: 'user_id,date' }
@@ -109,6 +110,15 @@ export default function DayDetailPage() {
     setVoting(false)
   }
 
+  async function handleRemove(tripId: number) {
+    await supabase.from('votes').delete().eq('trip_id', tripId)
+    await supabase.from('removed_trips').insert({ trip_id: tripId })
+    setRemovedIds(prev => [...prev, tripId])
+    if (myVote === tripId) setMyVote(null)
+    setVoteCounts(prev => { const next = { ...prev }; delete next[tripId]; return next })
+    setTripWeathers(prev => { const next = { ...prev }; delete next[tripId]; return next })
+  }
+
   const [y, m, d] = date.split('-').map(Number)
   const dateObj = new Date(y, m - 1, d)
   const formattedDate = dateObj.toLocaleDateString('cs-CZ', {
@@ -116,6 +126,7 @@ export default function DayDetailPage() {
   })
 
   const availableProfiles = profiles.filter(p => availableIds.includes(p.id))
+  const trips = getTripsForDate(date, removedIds)
   const totalVotes = Object.values(voteCounts).reduce((a, b) => a + b, 0)
 
   if (loading) return (
@@ -189,17 +200,26 @@ export default function DayDetailPage() {
                   <div className="p-3 flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <h4 className="font-semibold text-gray-800">{trip.name}</h4>
-                      <button
-                        onClick={() => handleVote(trip.id)}
-                        disabled={voting}
-                        className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                          isMyVote
-                            ? 'bg-blue-500 text-white hover:bg-blue-600'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        👍 {votes}
-                      </button>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => handleVote(trip.id)}
+                          disabled={voting}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                            isMyVote
+                              ? 'bg-blue-500 text-white hover:bg-blue-600'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          👍 {votes}
+                        </button>
+                        <button
+                          onClick={() => handleRemove(trip.id)}
+                          title="Byli jsme tu"
+                          className="p-1 rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors text-xs"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{trip.description}</p>
                     <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
@@ -210,7 +230,6 @@ export default function DayDetailPage() {
                   </div>
                 </div>
 
-                {/* Progress bar hlasů */}
                 {totalVotes > 0 && (
                   <div className="px-4 pt-2 pb-1">
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -222,7 +241,6 @@ export default function DayDetailPage() {
                   </div>
                 )}
 
-                {/* Počasí v cíli */}
                 <div className="border-t border-gray-100 px-4 py-2.5 bg-gray-50 flex items-center gap-3">
                   <span className="text-xs text-gray-400 flex-shrink-0">Počasí v {trip.city}:</span>
                   {weather === undefined ? (
@@ -249,7 +267,7 @@ export default function DayDetailPage() {
             )
           })}
         </div>
-        {myVote === null && (
+        {myVote === null && trips.length > 0 && (
           <p className="text-xs text-gray-400 text-center mt-4">Klikni na 👍 u výletu, který chceš jet</p>
         )}
       </div>

@@ -108,7 +108,7 @@ function seededRandom(seed: number) {
   }
 }
 
-export function getTripsForDate(date: string) {
+export function getTripsForDate(date: string, excludeIds: number[] = []) {
   const seed = date.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
   const random = seededRandom(seed)
   const shuffled = [...TRIPS]
@@ -116,5 +116,5 @@ export function getTripsForDate(date: string) {
     const j = Math.floor(random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
   }
-  return shuffled.slice(0, 3)
+  return shuffled.filter(t => !excludeIds.includes(t.id)).slice(0, 3)
 }
