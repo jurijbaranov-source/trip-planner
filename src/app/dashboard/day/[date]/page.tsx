@@ -79,7 +79,7 @@ export default function DayDetailPage() {
       )
 
       const weatherMap: Record<number, WeatherData | null | 'too_far'> = {}
-      for (const r of weatherResults) weatherMap[r.id] = r.data
+      for (const r of weatherResults) (weatherMap as any)[r.id] = r.data
       setTripWeathers(weatherMap)
     }
 
