@@ -29,22 +29,21 @@ export default function CalendarDay({
 
   return (
     <div className={`
-      relative rounded-xl ${getColor(count, total)}
+      relative rounded-xl ${isPast ? 'bg-gray-100' : getColor(count, total)}
       ${isToday ? 'ring-2 ring-blue-400 ring-offset-1' : ''}
-      ${isPast ? 'opacity-40' : ''}
     `}>
       <Link
         href={`/dashboard/day/${dateStr}`}
         className={`flex flex-col items-center justify-center aspect-square p-1 ${isPast ? 'pointer-events-none' : 'hover:brightness-95 transition-all'}`}
       >
         <span className={`text-sm leading-tight
-          ${isCurrentUser ? 'font-bold text-blue-700' : 'font-medium text-gray-700'}
-          ${isHighCount ? '!text-white' : ''}
+          ${isPast ? 'font-medium text-gray-300' : isCurrentUser ? 'font-bold text-blue-700' : 'font-medium text-gray-700'}
+          ${!isPast && isHighCount ? '!text-white' : ''}
         `}>
           {day}
         </span>
         {count > 0 && (
-          <span className={`text-xs leading-tight ${isHighCount ? 'text-white/80' : 'text-gray-400'}`}>
+          <span className={`text-xs leading-tight ${isPast ? 'text-gray-300' : isHighCount ? 'text-white/80' : 'text-gray-400'}`}>
             {count}
           </span>
         )}
